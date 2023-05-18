@@ -124,7 +124,6 @@ function App() {
           },
         }}
         pageSizeOptions={[5, 10]}
-        checkboxSelection
       />
 
       <Grid
