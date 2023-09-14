@@ -1,18 +1,30 @@
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
-import { DataGrid, GridColDef, GridValueGetterParams } from "@mui/x-data-grid";
+import {
+  DataGrid,
+  GridColDef,
+  GridValueGetterParams,
+  GridRowSelectionModel,
+} from "@mui/x-data-grid";
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Unstable_Grid2";
 import Box from "@mui/material/Box";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { experimentalStyled as styled } from "@mui/material/styles";
+import Select, { SelectChangeEvent } from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 
 type WordRowType = {
   id: number;
   en: string | null;
   cht: string | null;
   part_speech: string | null;
+};
+
+type SynthesisVoiceType = {
+  id: number;
+  speechSynthesisVoice: SpeechSynthesisVoice;
 };
 
 function getRandom(min: number, max: number): number {
@@ -34,6 +46,11 @@ function Home() {
   const [showWord, setShowWord] = useState<string | null>("");
   const [wordRows, setWordRows] = useState<WordRowType[]>([]);
   const [wordText, setWordText] = useState<string>("");
+  const [voice, setVoice] = useState("");
+  const [voiceList, setVoiceList] = useState<SynthesisVoiceType[]>([]);
+
+  const [rowSelectionModel, setRowSelectionModel] =
+    useState<GridRowSelectionModel>([]);
 
   const columns: GridColDef[] = [
     { field: "id", headerName: "ID", width: 70 },
@@ -107,11 +124,58 @@ function Home() {
     };
   };
 
+  const speak = (msg: string) => {
+    let u = new SpeechSynthesisUtterance();
+    u.lang = "zh-TW";
+    u.text = msg;
+    window.speechSynthesis.speak(u);
+  };
+
+  const populateVoiceList = useCallback(() => {
+    const newVoices = window.speechSynthesis.getVoices();
+    const synthesisVoiceList: SynthesisVoiceType[] = [];
+    let defaultVoice = "";
+
+    newVoices.forEach(function (SynthesisVoice, i) {
+      if (SynthesisVoice.name === "Google US English") {
+        defaultVoice = SynthesisVoice.name as string;
+      }
+      synthesisVoiceList.push({
+        id: i + 1,
+        speechSynthesisVoice: SynthesisVoice,
+      });
+    });
+
+    setVoice(defaultVoice);
+    setVoiceList(synthesisVoiceList);
+  }, []);
+
+  useEffect(() => {
+    populateVoiceList();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = populateVoiceList;
+    }
+  }, [populateVoiceList]);
+
+  const handleVoiceChange = (event: SelectChangeEvent) => {
+    setVoice(event.target.value as string);
+  };
+
   return (
     <div>
       <DataGrid
         rows={wordRows}
         columns={columns}
+        onRowSelectionModelChange={(newRowSelectionModel) => {
+          const selectId: number = Number(newRowSelectionModel[0]);
+          const en = wordRows[selectId].en;
+          setRowSelectionModel(newRowSelectionModel);
+
+          window.speechSynthesis.cancel();
+
+          speak(en as string);
+        }}
+        rowSelectionModel={rowSelectionModel}
         initialState={{
           pagination: {
             paginationModel: { page: 0, pageSize: 5 },
@@ -167,6 +231,16 @@ function Home() {
         Upload File
         <input type="file" hidden onChange={handleFileUpload} accept=".csv" />
       </Button>
+
+      <Select sx={{ minWidth: 130 }} value={voice} onChange={handleVoiceChange}>
+        {voiceList?.map((option) => {
+          return (
+            <MenuItem key={option.id} value={option.speechSynthesisVoice.name}>
+              {option.speechSynthesisVoice.name}
+            </MenuItem>
+          );
+        })}
+      </Select>
     </div>
   );
 }
