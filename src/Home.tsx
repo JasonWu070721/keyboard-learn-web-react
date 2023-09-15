@@ -1,12 +1,7 @@
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import SendIcon from "@mui/icons-material/Send";
-import {
-  DataGrid,
-  GridColDef,
-  GridValueGetterParams,
-  GridRowSelectionModel,
-} from "@mui/x-data-grid";
+
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Unstable_Grid2";
 import Box from "@mui/material/Box";
@@ -14,6 +9,7 @@ import { useState, useEffect, useCallback } from "react";
 import { experimentalStyled as styled } from "@mui/material/styles";
 import Select, { SelectChangeEvent } from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
+import WordTabe from "./WordTable";
 
 type WordRowType = {
   id: number;
@@ -46,31 +42,9 @@ function Home() {
   const [showWord, setShowWord] = useState<string | null>("");
   const [wordRows, setWordRows] = useState<WordRowType[]>([]);
   const [wordText, setWordText] = useState<string>("");
-  const [voice, setVoice] = useState("");
+  const [voiceName, setVoiceName] = useState("");
+  const [voice, setVoice] = useState<SynthesisVoiceType>();
   const [voiceList, setVoiceList] = useState<SynthesisVoiceType[]>([]);
-
-  const [rowSelectionModel, setRowSelectionModel] =
-    useState<GridRowSelectionModel>([]);
-
-  const columns: GridColDef[] = [
-    { field: "id", headerName: "ID", width: 70 },
-    { field: "en", headerName: "EN", width: 130 },
-    { field: "cht", headerName: "CHT", width: 130 },
-    {
-      field: "part_speech",
-      headerName: "Part of speech",
-      width: 90,
-    },
-    {
-      field: "fullWord",
-      headerName: "Full name",
-      description: "This column has a value getter and is not sortable.",
-      sortable: false,
-      width: 160,
-      valueGetter: (params: GridValueGetterParams) =>
-        `${params.row.en || ""} ${params.row.cht || ""}`,
-    },
-  ];
 
   const Item = styled(Paper)(({ theme }) => ({
     backgroundColor: theme.palette.mode === "dark" ? "#1A2027" : "#fff",
@@ -90,6 +64,9 @@ function Home() {
   };
 
   const handleFileUpload = (event: any) => {
+    if (event.target.files.length <= 0) {
+      return;
+    }
     const file = event.target.files[0];
     const reader = new FileReader();
 
@@ -126,7 +103,7 @@ function Home() {
 
   const speak = (msg: string) => {
     let u = new SpeechSynthesisUtterance();
-    u.lang = "zh-TW";
+    u.voice = voice!.speechSynthesisVoice;
     u.text = msg;
     window.speechSynthesis.speak(u);
   };
@@ -146,7 +123,12 @@ function Home() {
       });
     });
 
-    setVoice(defaultVoice);
+    const found = synthesisVoiceList.find(
+      (element) => element.speechSynthesisVoice.name === "Google US English"
+    );
+
+    setVoice(found);
+    setVoiceName(defaultVoice);
     setVoiceList(synthesisVoiceList);
   }, []);
 
@@ -158,32 +140,17 @@ function Home() {
   }, [populateVoiceList]);
 
   const handleVoiceChange = (event: SelectChangeEvent) => {
-    setVoice(event.target.value as string);
+    setVoiceName(event.target.value as string);
+    const found = voiceList.find(
+      (element) =>
+        element.speechSynthesisVoice.name === (event.target.value as string)
+    );
+
+    setVoice(found);
   };
 
   return (
     <div>
-      <DataGrid
-        rows={wordRows}
-        columns={columns}
-        onRowSelectionModelChange={(newRowSelectionModel) => {
-          const selectId: number = Number(newRowSelectionModel[0]);
-          const en = wordRows[selectId].en;
-          setRowSelectionModel(newRowSelectionModel);
-
-          window.speechSynthesis.cancel();
-
-          speak(en as string);
-        }}
-        rowSelectionModel={rowSelectionModel}
-        initialState={{
-          pagination: {
-            paginationModel: { page: 0, pageSize: 5 },
-          },
-        }}
-        pageSizeOptions={[5, 10]}
-      />
-
       <Grid
         container
         spacing={{ xs: 2, md: 3 }}
@@ -195,6 +162,7 @@ function Home() {
           </Grid>
         ))}
       </Grid>
+      <WordTabe speak={speak} wordRows={wordRows} />
 
       <Box sx={{ display: "block", displayPrint: "none" }}>
         {showWord}
@@ -232,7 +200,11 @@ function Home() {
         <input type="file" hidden onChange={handleFileUpload} accept=".csv" />
       </Button>
 
-      <Select sx={{ minWidth: 130 }} value={voice} onChange={handleVoiceChange}>
+      <Select
+        sx={{ minWidth: 130 }}
+        value={voiceName}
+        onChange={handleVoiceChange}
+      >
         {voiceList?.map((option) => {
           return (
             <MenuItem key={option.id} value={option.speechSynthesisVoice.name}>
